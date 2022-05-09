@@ -10,14 +10,9 @@ if not 'opentriviata' in config:
     print("Unable to access database credentials.")
     sys.exit()
 
-# Retrieve database credentials
-db_host = config['opentriviata']['Host']
-db_user = config['opentriviata']['User']
-db_pass = config['opentriviata']['Pass']
-
-
 try:
     with connect(
+        # Use database credentials from .ini
         host=config['opentriviata']['Host'],
         user=config['opentriviata']['User'],
         password=config['opentriviata']['Pass'],
