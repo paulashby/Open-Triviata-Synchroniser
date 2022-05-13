@@ -12,7 +12,7 @@ args = parser.parse_args()
 configfilename = getattr(args, 'config')
 
 # Name of section to parse from config file
-configname = configfilename.replace('.ini', '')
+configname = 'dbconfig'
 config = configparser.ConfigParser()
 config.read(configfilename)
 
@@ -51,8 +51,7 @@ try:
             "CREATE TABLE categories (id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, category VARCHAR(255) NOT NULL UNIQUE)",
             "ALTER TABLE categories AUTO_INCREMENT=9",
             "CREATE TABLE questions (id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, category_id INTEGER NOT NULL, type VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, question_text VARCHAR(1024) NOT NULL UNIQUE, FOREIGN KEY(category_id) REFERENCES categories(id))",
-            "CREATE TABLE answers (question_id INTEGER NOT NULL, answer VARCHAR(1024) NOT NULL, correct BOOLEAN NOT NULL, FOREIGN KEY(question_id) REFERENCES questions(id))",
-            "CREATE TABLE tokens (token VARCHAR(128) UNIQUE)"
+            "CREATE TABLE answers (question_id INTEGER NOT NULL, answer VARCHAR(1024) NOT NULL, correct BOOLEAN NOT NULL, FOREIGN KEY(question_id) REFERENCES questions(id))"
         ]
         with connection.cursor() as cursor:
             for db_query in db_queries:

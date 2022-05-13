@@ -1,5 +1,16 @@
+import sys
 import requests   
 from exceptions import RequestError
+import configparser
+from mysql.connector import connect, Error
+
+# Get database credentials from config file
+config = configparser.ConfigParser()
+config.read("appconfig.ini")
+
+if not "dbconfig" in config:
+    print("Unable to access database credentials.")
+    sys.exit()
 
 # Lookup helpers //////////////////////////////////////
 
@@ -47,17 +58,30 @@ def global_question_count_lookup(api_data):
 # Token helpers //////////////////////////////////////////
 
 def get_session_token():
-    
-    req_details = {
-        'endpoint': 'api_token.php',
-        'parameters': {
-            'command': 'request'
-        }
-    }
-    return api_request(req_details)
 
-def reset_session_token():
-    # Token is not defined
+    config.read('appconfig.ini')
+    token = config.get('tokenconfig', 'api_token')
+    import pdb; pdb.set_trace()
+    if len(token) == 0:
+        # Token has not been set yet - request one from api
+        req_details = {
+            'endpoint': 'api_token.php',
+            'parameters': {
+                'command': 'request'
+            }
+        }
+        token = api_request(req_details)
+        config.set('tokenconfig', 'api_token', token)
+        with open('appconfig.ini', 'w') as configfile:
+            config.write(configfile)
+        
+        return api_request(req_details)
+
+    else:
+        return token
+
+def reset_session_token(token):
+    print("resetting session token")
     req_details = {
         'endpoint': 'api_token.php',
         'parameters': {
@@ -159,3 +183,24 @@ def api_request(req_details):
 
     except (KeyError, TypeError, ValueError):
         return None
+
+# Execute the provided list of MySQL queries
+def db_query(db_queries):
+
+    # Name of database section in config file
+    configname = 'dbconfig'
+    try:
+        with connect(
+            
+            # Database credentials from config file
+            host=config[configname]['Host'],
+            user=config[configname]['User'],
+            password=config[configname]['Pass'],
+            database="opentriviata",
+        ) as connection:
+            with connection.cursor() as cursor:
+                for db_query in db_queries:
+                    cursor.execute(db_query)
+
+    except Error as e:
+        print(e)
