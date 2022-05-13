@@ -12,7 +12,7 @@ configname = getattr(args, 'filename')
 
 config = configparser.ConfigParser()
 
-# Using <placeholders> - replace these with live values before creating ini file
+# Use parsed arguments to create config file named [configname]
 config[configname] = {}
 config[configname]['Host'] = getattr(args, 'hostname')
 config[configname]['User'] = getattr(args, 'username')
