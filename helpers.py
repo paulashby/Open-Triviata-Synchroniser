@@ -1,51 +1,5 @@
 import requests   
-import exceptions
-
-"""
-
-
-What data must we include
-
-Do we need to maintain state somehow?
-How do we know where we're at in the process?
-
-
-If we work through each category, we'd do:
-    get the id and the count of the highest-numbered category from opentriviata
-    get the number of available entries from the API
-    https://opentdb.com/api_count.php?category=9
-    Return eg
-    {
-        "category_id": 9,
-        "category_question_count": {
-            "total_question_count": 298,
-            "total_easy_question_count": 116,
-            "total_medium_question_count": 123,
-            "total_hard_question_count": 59
-        }
-    }
-    if our count matches total_question_count
-        - move on to next category
-    elif our count is 0
-        - scrape_category(category_id)
-    else (our count is lower than total_question_count) either:
-        - new questions have been added
-        - something has gone wrong and we failed to complete the category on our previous session
-       In either case, we need to:
-        
-        - check the counts for each level of difficulty (LOD), 
-            if we're short in all
-                - delete all questions for this category, remove it from the categories table and start again 
-            else 
-                - we're only short in some, delete all questions for each under-populated LOD and redo it - 
-                (will also need to delete from answers table AND category if we end up removing all)
-                - we are definitely short in at least one, since our category question count is lower than total_question_count
-
-
-    Get session token
-
-"""
-
+from exceptions import RequestError
 
 # Lookup helpers //////////////////////////////////////
 
@@ -118,7 +72,7 @@ def reset_session_token():
 # Callbacks ////////////////////////////////////////////////
 
 # Request was successful
-def success_callback(api_data):
+def success_callback(api_data, req_details):
     if req_details['endpoint'].find('token') < 0:
         # This is a simple success message - I think related to getting questions
          # If we have question data, add to our db, load next batch
@@ -127,7 +81,7 @@ def success_callback(api_data):
 
     else:
         # This is a token operation
-        return api_response['token']
+        return api_data['token']
 
 # Not enough items in Open Trivia DB to fulfill request
 def quantity_callback(api_data):
@@ -160,7 +114,7 @@ response_callbacks = {
 def api_request(req_details):
 
     req_url = "https://opentdb.com/"
-    import pdb; pdb.set_trace()
+    
     # Assemble API request
     if 'endpoint' in req_details:
         req_url += req_details['endpoint']
@@ -175,7 +129,10 @@ def api_request(req_details):
 
     # Make the call
     try:
-        response = requests.get(req_url)
+        headers = {
+          'Cookie': 'PHPSESSID=1b01789fb2d1898c5d3358944fec0590'
+        }
+        response = requests.get(req_url, headers=headers)
         response.raise_for_status()
     except requests.RequestException:
         return None
@@ -183,22 +140,22 @@ def api_request(req_details):
     # Parse response and return the correct data to the caller
     try:
         api_response = response.json()
-        response_code = api_response["response_code"]
+        # import pdb; pdb.set_trace()
 
-        if not response_code:
+        if 'response_code' not in api_response.keys():
             # This is a lookup - callbacks are passed in with req_details
             # Hoping any exceptions will be caught by this containing try block
             return req_details['callback'](api_response)
 
         # Cap response_code to 5 to trigger our unknown error message if code is greater than 4
-        response_code = min(response_code, 5);
+        response_code = min(api_response["response_code"], 5)
 
         # Pass code to error_callback if listed in error codes in exceptions.py
         if response_code in RequestError.e_by_code.keys():
             return error_callback(response_code)
 
         # Use response_callbacks to route to correct callback
-        return response_callbacks[response_code](api_response)
+        return response_callbacks[response_code](api_response, req_details)
 
     except (KeyError, TypeError, ValueError):
         return None
