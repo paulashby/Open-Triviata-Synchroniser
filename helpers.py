@@ -15,7 +15,7 @@ def category_lookup():
     return api_request(req_details)
 
 
-def Category_question_count_lookup(category_id):
+def category_question_count_lookup(category_id):
 
     def callback(api_data):
         return api_data['category_question_counts']
@@ -30,7 +30,7 @@ def Category_question_count_lookup(category_id):
     return api_request(req_details)
 
 
-def global_question_count_lookup():
+def global_question_count_lookup(api_data):
 
     def callback(api_data):
         # Do I need to access this here to benefit from the try block calling all this in api_request()
