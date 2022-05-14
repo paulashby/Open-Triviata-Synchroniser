@@ -1,6 +1,5 @@
 import sys
 import requests   
-from exceptions import RequestError
 import configparser
 from mysql.connector import connect, Error
 
@@ -29,7 +28,7 @@ def category_lookup():
 def category_question_count_lookup(category_id):
 
     def callback(api_data):
-        return api_data['category_question_counts']
+        return api_data['category_question_count']
     
     req_details = {
         'callback': callback,
@@ -54,16 +53,24 @@ def global_question_count_lookup(api_data):
     return api_request(req_details)
 
 
+# Token Empty Session Token has returned all possible questions for the specified query
+def category_complete(api_data):
+
+    # Move on to next category
+    print ("Category Completed. Resetting the Token is necessary")
+
+
 
 # Token helpers //////////////////////////////////////////
 
-def get_session_token():
+
+def get_session_token(expired = False):
 
     config.read('appconfig.ini')
     token = config.get('tokenconfig', 'api_token')
-    import pdb; pdb.set_trace()
-    if len(token) == 0:
-        # Token has not been set yet - request one from api
+    
+    if expired or len(token) == 0:
+        # Token has expired or has not been set yet - request one from api
         req_details = {
             'endpoint': 'api_token.php',
             'parameters': {
@@ -71,6 +78,7 @@ def get_session_token():
             }
         }
         token = api_request(req_details)
+        # The api will return code 3 if the token has expired (Token Not Found Session Token does not exist)
         config.set('tokenconfig', 'api_token', token)
         with open('appconfig.ini', 'w') as configfile:
             config.write(configfile)
@@ -80,7 +88,9 @@ def get_session_token():
     else:
         return token
 
+
 def reset_session_token(token):
+
     print("resetting session token")
     req_details = {
         'endpoint': 'api_token.php',
@@ -95,8 +105,10 @@ def reset_session_token(token):
 
 # Callbacks ////////////////////////////////////////////////
 
+
 # Request was successful
 def success_callback(api_data, req_details):
+
     if req_details['endpoint'].find('token') < 0:
         # This is a simple success message - I think related to getting questions
          # If we have question data, add to our db, load next batch
@@ -107,23 +119,12 @@ def success_callback(api_data, req_details):
         # This is a token operation
         return api_data['token']
 
+
 # Not enough items in Open Trivia DB to fulfill request
 def quantity_callback(api_data):
+
     print("Quantity unavailable - reduce to [total available] % [qs per request] and try again")
     return
-
-# Token Empty Session Token has returned all possible questions for the specified query
-def category_complete(api_data):
-    # Done - Reset session token and move on to next category
-    # Reset session token?
-    print ("Category Completed. Resetting the Token is necessary")
-
-
-def error_callback(response_code):
-    try:
-        raise(RequestError(response_code))
-    except RequestError as Argument:
-        print('RequestError: ', Argument)
 
 
 # Used by api_request to route callbacks
@@ -132,7 +133,6 @@ response_callbacks = {
     1: quantity_callback,
     4: category_complete
 }
-
 
 # Make api calls and parse responses
 def api_request(req_details):
@@ -151,8 +151,13 @@ def api_request(req_details):
             req_url += f"{pre}{key}={val}"
             pre = "&"
 
+    # Append the token to ensure the api returns no questions we've already had
+    req_url += f"{pre}token={get_session_token()}"
+    print(req_url)
+
     # Make the call
     try:
+        payload={}
         headers = {
           'Cookie': 'PHPSESSID=1b01789fb2d1898c5d3358944fec0590'
         }
@@ -161,28 +166,56 @@ def api_request(req_details):
     except requests.RequestException:
         return None
 
+    return process_response(req_details, response.json(), req_url)
+
+
+def process_response(req_details, api_response, req_url):
+    
     # Parse response and return the correct data to the caller
     try:
-        api_response = response.json()
-        # import pdb; pdb.set_trace()
+        # api_response = {
+        #     'response_mock': True,
+        #     'response_code': 2
+        # }
 
-        if 'response_code' not in api_response.keys():
-            # This is a lookup - callbacks are passed in with req_details
-            # Hoping any exceptions will be caught by this containing try block
+        if not 'response_code'in api_response.keys():
+            # This must be a lookup. Lookup callbacks are passed in with req_details
             return req_details['callback'](api_response)
 
-        # Cap response_code to 5 to trigger our unknown error message if code is greater than 4
-        response_code = min(api_response["response_code"], 5)
+        response_code = api_response['response_code']
+       
+        if response_code == 2: 
+            print(f"\nError (2): Invalid parameter passed to Open Trivia API:\n{req_url}\n")
+            sys.exit(1)
 
-        # Pass code to error_callback if listed in error codes in exceptions.py
-        if response_code in RequestError.e_by_code.keys():
-            return error_callback(response_code)
+        elif response_code == 3:
+            # Token has expired - need to get new one to ensure api returns unique questions
+            return update_token()
+            
+        elif response_code > 4:
+            # Response code does not match expected values - assume question data is unviable
+            print(f"\nError {response_code}: Open Trivia API returned an unknown error code:\n{req_url}\n")
+            sys.exit(1)
 
         # Use response_callbacks to route to correct callback
         return response_callbacks[response_code](api_response, req_details)
 
     except (KeyError, TypeError, ValueError):
         return None
+
+
+
+def update_token():
+
+    # Token has expired - need to get new one to ensure api returns unique questions
+    get_session_token(True)
+
+    # If the current category is incomplete, start over to avoid duplicate questions
+    return redo_category()
+
+
+
+
 
 # Execute the provided list of MySQL queries
 def db_query(db_queries):
