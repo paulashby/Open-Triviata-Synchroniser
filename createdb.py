@@ -48,8 +48,7 @@ try:
     ) as connection:
         # SQL varchar usually holds 1 byte per character and 2 more bytes for the length information. It is recommended to use varchar as the data type when columns have variable length and the actual data is way less than the given capacity.
         db_queries = [
-            "CREATE TABLE categories (id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, category VARCHAR(255) NOT NULL UNIQUE)",
-            "ALTER TABLE categories AUTO_INCREMENT=9",
+            "CREATE TABLE categories (id INTEGER PRIMARY KEY NOT NULL, category VARCHAR(255) NOT NULL UNIQUE)",
             "CREATE TABLE questions (id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, category_id INTEGER NOT NULL, type VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, question_text VARCHAR(1024) NOT NULL UNIQUE, FOREIGN KEY(category_id) REFERENCES categories(id))",
             "CREATE TABLE answers (question_id INTEGER NOT NULL, answer VARCHAR(1024) NOT NULL, correct BOOLEAN NOT NULL, FOREIGN KEY(question_id) REFERENCES questions(id))"
         ]
