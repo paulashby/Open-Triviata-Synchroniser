@@ -3,6 +3,22 @@ import requests
 import configparser
 from mysql.connector import connect, Error
 
+MIN_CAT_NUM = 9
+
+"""
+category_details stores result of a call to category_question_count_lookup()
+{
+    "category_id": 9,
+    "category_question_count": {
+        "total_question_count": 298,
+        "total_easy_question_count": 116,
+        "total_medium_question_count": 123,
+        "total_hard_question_count": 59
+    }
+}
+"""
+
+
 # Get database credentials from config file
 config = configparser.ConfigParser()
 config.read("appconfig.ini")
@@ -11,27 +27,33 @@ if not "dbconfig" in config:
     print("Unable to access database credentials.")
     sys.exit()
 
+
+
+
 # Lookup helpers //////////////////////////////////////
 
-def category_lookup():
+def get_current_cat_id():
+    query_list = ["SELECT MAX(id) FROM categories"]
+    return db_query(query_list)[0]
 
-    def callback(api_data):
-        return api_data['trivia_categories']
-    
+
+def get_next_cat_id():
+    return False
+
+
+def get_all_cat_details():
+
     req_details = {
-        'callback': callback,
+        'callback': lambda api_data: api_data['trivia_categories'],
         'endpoint': 'api_category.php'
     }
     return api_request(req_details)
 
 
-def category_question_count_lookup(category_id):
+def get_cat_q_count(category_id):
 
-    def callback(api_data):
-        return api_data['category_question_count']
-    
     req_details = {
-        'callback': callback,
+        'callback': lambda api_data: api_data,
         'endpoint': 'api_count.php',
         'parameters': {
             'category': category_id
@@ -40,25 +62,31 @@ def category_question_count_lookup(category_id):
     return api_request(req_details)
 
 
-def global_question_count_lookup(api_data):
+def get_curr_cat_q_count():
+    curr_cat_id = get_current_cat_id()
 
-    def callback(api_data):
-        # Do I need to access this here to benefit from the try block calling all this in api_request()
-        return api_data
-    
+    if curr_cat_id == None:
+        return make_new_cat(MIN_CAT_NUM)
+
+    return get_cat_q_count(curr_cat_id)
+
+
+def make_new_cat(category_id):
+
+    # Retrieve sample question to determine category name
     req_details = {
-        'callback': callback,
-        'endpoint': 'api_count_global.php'
+        'callback': lambda api_results, req_details: api_results['category'],
+        'endpoint': 'api.php',
+        'parameters': {
+            'amount': 1,
+            'category': category_id
+        }
     }
-    return api_request(req_details)
 
+    cat_name = api_request(req_details, False)
+    db_query([{'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 'values': (category_id, cat_name)}])
 
-# Token Empty Session Token has returned all possible questions for the specified query
-def category_complete(api_data):
-
-    # Move on to next category
-    print ("Category Completed. Resetting the Token is necessary")
-
+    return get_cat_q_count(category_id)
 
 
 # Token helpers //////////////////////////////////////////
@@ -107,35 +135,29 @@ def reset_session_token(token):
 
 
 # Request was successful
-def success_callback(api_data, req_details):
+def success_callback(api_response, req_details):
 
     if req_details['endpoint'].find('token') < 0:
         # This is a simple success message - I think related to getting questions
          # If we have question data, add to our db, load next batch
-         print("Add to database: \n" + repr(api_data))
+         print("Add to database: \n" + repr(api_response))
          return
 
     else:
         # This is a token operation
-        return api_data['token']
+        return api_response['token']
 
 
 # Not enough items in Open Trivia DB to fulfill request
-def quantity_callback(api_data):
+def quantity_callback():
+
 
     print("Quantity unavailable - reduce to [total available] % [qs per request] and try again")
     return
 
 
-# Used by api_request to route callbacks
-response_callbacks = {
-    0: success_callback,
-    1: quantity_callback,
-    4: category_complete
-}
-
 # Make api calls and parse responses
-def api_request(req_details):
+def api_request(req_details, use_token = True):
 
     req_url = "https://opentdb.com/"
     
@@ -151,13 +173,12 @@ def api_request(req_details):
             req_url += f"{pre}{key}={val}"
             pre = "&"
 
-    # Append the token to ensure the api returns no questions we've already had
-    req_url += f"{pre}token={get_session_token()}"
-    print(req_url)
+    if use_token:
+        # Append the token to ensure the api returns no questions we've already had
+        req_url += f"{pre}token={get_session_token()}"
 
     # Make the call
     try:
-        payload={}
         headers = {
           'Cookie': 'PHPSESSID=1b01789fb2d1898c5d3358944fec0590'
         }
@@ -177,28 +198,34 @@ def process_response(req_details, api_response, req_url):
         #     'response_mock': True,
         #     'response_code': 2
         # }
-
         if not 'response_code'in api_response.keys():
             # This must be a lookup. Lookup callbacks are passed in with req_details
             return req_details['callback'](api_response)
 
         response_code = api_response['response_code']
+
+        if response_code == 0:
+            return req_details['callback'](api_response['results'][0], req_details)
+
+        elif response_code == 1:
+            return quantity_callback()
        
-        if response_code == 2: 
+        elif response_code == 2: 
             print(f"\nError (2): Invalid parameter passed to Open Trivia API:\n{req_url}\n")
             sys.exit(1)
 
         elif response_code == 3:
             # Token has expired - need to get new one to ensure api returns unique questions
             return update_token()
+
+        elif response_code == 4:
+            # We've processed all questions in the current category
+            return process_cat(get_next_cat_id)
             
-        elif response_code > 4:
+        else:
             # Response code does not match expected values - assume question data is unviable
             print(f"\nError {response_code}: Open Trivia API returned an unknown error code:\n{req_url}\n")
             sys.exit(1)
-
-        # Use response_callbacks to route to correct callback
-        return response_callbacks[response_code](api_response, req_details)
 
     except (KeyError, TypeError, ValueError):
         return None
@@ -214,14 +241,12 @@ def update_token():
     return redo_category()
 
 
-
-
-
 # Execute the provided list of MySQL queries
 def db_query(db_queries):
 
     # Name of database section in config file
     configname = 'dbconfig'
+
     try:
         with connect(
             
@@ -231,9 +256,27 @@ def db_query(db_queries):
             password=config[configname]['Pass'],
             database="opentriviata",
         ) as connection:
-            with connection.cursor() as cursor:
-                for db_query in db_queries:
-                    cursor.execute(db_query)
+            
+            for db_query in db_queries:
+                print(repr(db_query))
+                use_prepared = type(db_query) is dict
+                with connection.cursor(prepared=use_prepared) as cursor:
+                    if use_prepared:
+                        cursor.execute(db_query['query'], db_query['values'])
+                    else:
+                        cursor.execute(db_query)
+
+                    """
+                    query_results will be overwritten on every iteration.
+
+                    This is OK, because the db_queries argument will contain 
+                    only a single item when performing a SELECT operation
+                    """
+                    query_results = cursor.fetchall()
+                    connection.commit()
+
+            return  query_results[0] if len(query_results) else 0
 
     except Error as e:
         print(e)
+
