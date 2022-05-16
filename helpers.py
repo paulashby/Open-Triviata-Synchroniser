@@ -5,19 +5,6 @@ from mysql.connector import connect, Error
 
 MIN_CAT_NUM = 9
 
-"""
-category_details stores result of a call to category_question_count_lookup()
-{
-    "category_id": 9,
-    "category_question_count": {
-        "total_question_count": 298,
-        "total_easy_question_count": 116,
-        "total_medium_question_count": 123,
-        "total_hard_question_count": 59
-    }
-}
-"""
-
 
 # Get database credentials from config file
 config = configparser.ConfigParser()
@@ -32,46 +19,93 @@ if not "dbconfig" in config:
 
 # Lookup helpers //////////////////////////////////////
 
-def get_current_cat_id():
-    query_list = ["SELECT MAX(id) FROM categories"]
-    return db_query(query_list)[0]
+
+def current_category():
+
+    """ Return id number of current category
+    """
+    
+    # Get highest numbered category from local database
+    curr_cat_id = db_query(["SELECT MAX(id) FROM categories"])[0]
+
+    if curr_cat_id == None:
+        return make_category(MIN_CAT_NUM)
+
+    return curr_cat_id
 
 
-def get_next_cat_id():
+def next_category():
     return False
 
 
-def get_all_cat_details():
+def category_info_all():
 
+    """ Get the entire list of categories and IDs from the API
+
+        :return: Category numbers and titles 
+    """
     req_details = {
         'callback': lambda api_data: api_data['trivia_categories'],
         'endpoint': 'api_category.php'
     }
-    return api_request(req_details)
+
+    return api_request(req_details, False)
 
 
-def get_cat_q_count(category_id):
+def question_breakdown(category_id = False):
 
-    req_details = {
-        'callback': lambda api_data: api_data,
-        'endpoint': 'api_count.php',
-        'parameters': {
-            'category': category_id
+    """ Get the number of questions in a category, total and by difficulty level
+
+        :param category_id: Global count if False, else count for given category
+        :return: The number of questions
+    """
+
+    if not category_id:
+        req_details = {
+            'callback': extract_counts,
+            'endpoint': 'api_count_global.php'
         }
+
+    else:
+        req_details = {
+            'callback': lambda api_data: api_data,
+            'endpoint': 'api_count.php',
+            'parameters': {
+                'category': category_id
+            }
+        }
+
+    return api_request(req_details, False)
+
+
+def extract_counts(api_data):
+
+    """ Get dictionary of verified question counts
+
+        :param api_data: Data returned by API
+        :Return: Dictionary of question counts
+    """
+
+    extracted_counts = {
+        'overall': api_data['overall']['total_num_of_verified_questions']
     }
-    return api_request(req_details)
+
+    for cat_key in api_data['categories'].keys():
+        extracted_counts[int(cat_key)] = api_data['categories'][cat_key]['total_num_of_verified_questions']
+
+    return extracted_counts
 
 
-def get_curr_cat_q_count():
-    curr_cat_id = get_current_cat_id()
-
-    if curr_cat_id == None:
-        return make_new_cat(MIN_CAT_NUM)
-
-    return get_cat_q_count(curr_cat_id)
+# Local database calls //////////////////////////////////////
 
 
-def make_new_cat(category_id):
+def make_category(category_id):
+
+    """ Add a new category to the local database
+
+        :param category_id: the id number for the new category
+        :return: the id number for the new category
+    """
 
     # Retrieve sample question to determine category name
     req_details = {
@@ -84,9 +118,29 @@ def make_new_cat(category_id):
     }
 
     cat_name = api_request(req_details, False)
-    db_query([{'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 'values': (category_id, cat_name)}])
+    db_query([{
+        'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 
+        'values': (category_id, cat_name)
+    }])
 
-    return get_cat_q_count(category_id)
+    return category_id
+
+def questions_in(category_id):
+
+    """ Get the number of questions added to the local database for the given category
+
+        :param category_id: The id of the category to check
+        :return: The number
+    """
+
+    return db_query([{
+        'query': "SELECT COUNT(*) FROM questions WHERE category_id = %s", 
+        'values': (category_id,)
+    }])[0]
+
+
+
+
 
 
 # Token helpers //////////////////////////////////////////
@@ -94,11 +148,17 @@ def make_new_cat(category_id):
 
 def get_session_token(expired = False):
 
+    """ Retrieve a session token
+
+        :param expired: Do not read from config - get new from API
+        :return: Session cookie string
+    """
+
     config.read('appconfig.ini')
     token = config.get('tokenconfig', 'api_token')
     
     if expired or len(token) == 0:
-        # Token has expired or has not been set yet - request one from api
+        # Token rejected or not set - request new one from api
         req_details = {
             'endpoint': 'api_token.php',
             'parameters': {
@@ -106,7 +166,11 @@ def get_session_token(expired = False):
             }
         }
         token = api_request(req_details)
-        # The api will return code 3 if the token has expired (Token Not Found Session Token does not exist)
+
+        if not token.isalnum():
+            print("Error: expected alpha numric token")
+            sys.exit(1)
+
         config.set('tokenconfig', 'api_token', token)
         with open('appconfig.ini', 'w') as configfile:
             config.write(configfile)
@@ -118,6 +182,12 @@ def get_session_token(expired = False):
 
 
 def reset_session_token(token):
+
+    """ Retrieve a new session cookie from the API
+
+        :param token: The old token
+        :return: The new token
+    """
 
     print("resetting session token")
     req_details = {
@@ -134,8 +204,14 @@ def reset_session_token(token):
 # Callbacks ////////////////////////////////////////////////
 
 
-# Request was successful
 def success_callback(api_response, req_details):
+
+    """ Process successful api calls
+
+        :param api_response: the returned data
+        :param req_details: the dictionary passed to api_request
+        :return: Token or True
+    """
 
     if req_details['endpoint'].find('token') < 0:
         # This is a simple success message - I think related to getting questions
@@ -148,18 +224,27 @@ def success_callback(api_response, req_details):
         return api_response['token']
 
 
-# Not enough items in Open Trivia DB to fulfill request
 def quantity_callback():
 
+    """ Not enough items in Open Trivia DB to fulfill request
+    """
+
+    # Need to decide what to do in this case - probably make the call again with the adjusments outlined below
 
     print("Quantity unavailable - reduce to [total available] % [qs per request] and try again")
     return
 
 
-# Make api calls and parse responses
 def api_request(req_details, use_token = True):
 
+    """ Make api calls and parse response
+
+        :param req_details: Dictionary containing the url fragments
+        :param use_token: required when retrieving unique questions
+    """
+
     req_url = "https://opentdb.com/"
+    pre = ""
     
     # Assemble API request
     if 'endpoint' in req_details:
@@ -174,7 +259,7 @@ def api_request(req_details, use_token = True):
             pre = "&"
 
     if use_token:
-        # Append the token to ensure the api returns no questions we've already had
+        # Append the token to ensure the api returns no duplicate questions
         req_url += f"{pre}token={get_session_token()}"
 
     # Make the call
@@ -192,7 +277,13 @@ def api_request(req_details, use_token = True):
 
 def process_response(req_details, api_response, req_url):
     
-    # Parse response and return the correct data to the caller
+    """" React to API response codes
+
+        :param req_details: Dictionary containing the url fragments
+        :param api_response: Data from api
+        :param req_url: The assembled url that was used for the api call
+    """
+
     try:
         # api_response = {
         #     'response_mock': True,
@@ -215,8 +306,11 @@ def process_response(req_details, api_response, req_url):
             sys.exit(1)
 
         elif response_code == 3:
-            # Token has expired - need to get new one to ensure api returns unique questions
-            return update_token()
+            # Token not found - get new one to ensure api returns unique questions
+            get_session_token(True)
+
+            # Make the request again
+            return api_request(req_details, True)
 
         elif response_code == 4:
             # We've processed all questions in the current category
@@ -229,16 +323,6 @@ def process_response(req_details, api_response, req_url):
 
     except (KeyError, TypeError, ValueError):
         return None
-
-
-
-def update_token():
-
-    # Token has expired - need to get new one to ensure api returns unique questions
-    get_session_token(True)
-
-    # If the current category is incomplete, start over to avoid duplicate questions
-    return redo_category()
 
 
 # Execute the provided list of MySQL queries
@@ -258,7 +342,6 @@ def db_query(db_queries):
         ) as connection:
             
             for db_query in db_queries:
-                print(repr(db_query))
                 use_prepared = type(db_query) is dict
                 with connection.cursor(prepared=use_prepared) as cursor:
                     if use_prepared:
