@@ -15,34 +15,11 @@ if not "dbconfig" in config:
     sys.exit()
 
 
-
-
-# Lookup helpers //////////////////////////////////////
-
-
-def current_category():
-
-    """ Return id number of current category
-    """
-    
-    # Get highest numbered category from local database
-    curr_cat_id = db_query(["SELECT MAX(id) FROM categories"])[0]
-
-    if curr_cat_id == None:
-        return make_category(MIN_CAT_NUM)
-
-    return curr_cat_id
-
-
-def next_category():
-    return False
-
-
 def category_info_all():
 
     """ Get the entire list of categories and IDs from the API
 
-        :return: Category numbers and titles 
+        :return: List containing dicts of category ids and names
     """
     req_details = {
         'callback': lambda api_data: api_data['trivia_categories'],
@@ -54,36 +31,47 @@ def category_info_all():
 
 def question_breakdown(category_id = False):
 
-    """ Get the number of questions in a category, total and by difficulty level
+    """ Get category question counts
 
         :param category_id: Global count if False, else count for given category
-        :return: The number of questions
+        :return: dict question counts by category id and additional entry for overall question count
+                 Plus, if category_id provided, dict with category id and question counts for each difficulty level
     """
 
+    req_details = {
+        'callback': extract_counts,
+        'endpoint': 'api_count_global.php'
+    }
+
+    questions = {
+        'global': api_request(req_details, False)
+    }
+
     if not category_id:
-        req_details = {
-            'callback': extract_counts,
-            'endpoint': 'api_count_global.php'
-        }
+        return questions
 
-    else:
-        req_details = {
-            'callback': lambda api_data: api_data,
-            'endpoint': 'api_count.php',
-            'parameters': {
-                'category': category_id
-            }
+    req_details = {
+        'callback': lambda api_data: api_data,
+        'endpoint': 'api_count.php',
+        'parameters': {
+            'category': category_id
         }
+    }
 
-    return api_request(req_details, False)
+    # Return a single dict with category number and question counts for each difficulty level
+    breakdown = api_request(req_details, False)
+    breakdown['category_question_count']['id'] = breakdown['category_id']
+    questions['category'] = breakdown['category_question_count']
+
+    return questions
 
 
 def extract_counts(api_data):
 
-    """ Get dictionary of verified question counts
+    """ Filter api_data to include only verified question counts
 
         :param api_data: Data returned by API
-        :Return: Dictionary of question counts
+        :Return: Dictionary of verified question counts
     """
 
     extracted_counts = {
@@ -94,9 +82,6 @@ def extract_counts(api_data):
         extracted_counts[int(cat_key)] = api_data['categories'][cat_key]['total_num_of_verified_questions']
 
     return extracted_counts
-
-
-# Local database calls //////////////////////////////////////
 
 
 def make_category(category_id):
@@ -118,6 +103,7 @@ def make_category(category_id):
     }
 
     cat_name = api_request(req_details, False)
+    
     db_query([{
         'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 
         'values': (category_id, cat_name)
@@ -125,28 +111,93 @@ def make_category(category_id):
 
     return category_id
 
-def questions_in(category_id):
+
+def next_category(category_id = MIN_CAT_NUM - 1):
+
+    """ Get the next category
+
+        :return: False or dict with category id and question counts for each difficulty level 
+    """
+    categories = category_status(category_id + 1)
+
+    if categories['completed']['all']:
+        return false
+
+    elif categories['completed']['current']:
+        return next_category(make_category(category_id + 1))
+
+    return categories['next']
+
+
+def category_status(category_id = False):
+
+    """ Get category status - helper for next_category()
+
+        :return: dict containing
+            - 'completed' dict with boolean statuses for 'all' and 'current' categories
+            - 'next' dict with question breakdown for next category to process
+    """
+    
+    if not category_id:
+        category_id = current_category()
+
+    source_questions = question_breakdown(category_id)
+
+    category = source_questions['category']
+    import pdb; pdb.set_trace()
+    global_question_count = source_questions['global']
+
+    total_questions_done = questions_done()
+    category_questions_done = questions_done(category_id)
+
+    return {
+        'completed': {
+            'all': (total_questions_done['global'] >= global_question_count['overall'] 
+            or not category_id in global_question_count.keys()),
+            'current': category_questions_done == category['total_question_count']
+        },
+        'next': category
+    }
+
+
+def current_category():
+
+    """ Return id number of current category or None
+    """
+    # Get highest numbered category from local database
+    curr_cat_id = db_query(["SELECT MAX(id) FROM categories"])[0]
+
+    return curr_cat_id
+
+
+def questions_done(category_id = False):
 
     """ Get the number of questions added to the local database for the given category
 
-        :param category_id: The id of the category to check
-        :return: The number
+        :param category_id: Global count if False, else count for given category
+        :return: dict of question counts - global and, if category_id provided, category
     """
 
-    return db_query([{
+    query_details = ["SELECT COUNT(*) FROM questions"]
+
+    questions = {
+       'global': db_query(query_details)[0] 
+    }
+
+    if not category_id:
+        return questions
+
+    query_details = [{
         'query': "SELECT COUNT(*) FROM questions WHERE category_id = %s", 
         'values': (category_id,)
-    }])[0]
+    }]
+
+    questions['category'] = db_query(query_details)[0]
+
+    return questions
 
 
-
-
-
-
-# Token helpers //////////////////////////////////////////
-
-
-def get_session_token(expired = False):
+def session_token(expired = False):
 
     """ Retrieve a session token
 
@@ -198,10 +249,6 @@ def reset_session_token(token):
         }
     }
     return api_request(req_details)
-
-
-
-# Callbacks ////////////////////////////////////////////////
 
 
 def success_callback(api_response, req_details):
@@ -260,7 +307,7 @@ def api_request(req_details, use_token = True):
 
     if use_token:
         # Append the token to ensure the api returns no duplicate questions
-        req_url += f"{pre}token={get_session_token()}"
+        req_url += f"{pre}token={session_token()}"
 
     # Make the call
     try:
@@ -285,10 +332,6 @@ def process_response(req_details, api_response, req_url):
     """
 
     try:
-        # api_response = {
-        #     'response_mock': True,
-        #     'response_code': 2
-        # }
         if not 'response_code'in api_response.keys():
             # This must be a lookup. Lookup callbacks are passed in with req_details
             return req_details['callback'](api_response)
@@ -307,7 +350,7 @@ def process_response(req_details, api_response, req_url):
 
         elif response_code == 3:
             # Token not found - get new one to ensure api returns unique questions
-            get_session_token(True)
+            session_token(True)
 
             # Make the request again
             return api_request(req_details, True)
