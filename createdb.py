@@ -46,11 +46,11 @@ try:
         password=config[configname]['Pass'],
         database="opentriviata",
     ) as connection:
-        # SQL varchar usually holds 1 byte per character and 2 more bytes for the length information. It is recommended to use varchar as the data type when columns have variable length and the actual data is way less than the given capacity.
+        # Now using MySQL server version 8.0.26 which uses utf8mb4 character set by default. So we need to allow up to four bytes per character.
         db_queries = [
             "CREATE TABLE categories (id INTEGER PRIMARY KEY NOT NULL, category VARCHAR(255) NOT NULL UNIQUE)",
-            "CREATE TABLE questions (id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, category_id INTEGER NOT NULL, type VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, question_text VARCHAR(1024) NOT NULL UNIQUE, FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE CASCADE)",
-            "CREATE TABLE answers (question_id INTEGER NOT NULL, answer VARCHAR(1024), correct BOOLEAN NOT NULL, FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE)"
+            "CREATE TABLE questions (id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, category_id INTEGER NOT NULL, type VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, question_text VARCHAR(768) NOT NULL UNIQUE, FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE CASCADE)",
+            "CREATE TABLE answers (question_id INTEGER NOT NULL, answer VARCHAR(768), correct BOOLEAN NOT NULL, FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE)"
         ]
         with connection.cursor() as cursor:
             for db_query in db_queries:
