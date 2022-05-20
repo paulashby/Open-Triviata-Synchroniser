@@ -31,7 +31,7 @@ def category_info_all():
 
 def question_breakdown(category_id = False):
 
-    """ Get category question counts
+    """ Get category question counts from API
 
         :param category_id: Global count if False, else count for given category
         :return: dict question counts by category id and additional entry for overall question count
@@ -112,19 +112,19 @@ def make_category(category_id):
     return category_id
 
 
-def next_category(category_id = MIN_CAT_NUM - 1):
+def next_category(category_id = MIN_CAT_NUM):
 
-    """ Get the next category
+    """ Get dictionary for the given category
 
         :return: False or dict with category id and question counts for each difficulty level 
     """
-    categories = category_status(category_id + 1)
+    categories = category_status(category_id)
 
     if categories['completed']['all']:
         return false
 
     elif categories['completed']['current']:
-        return next_category(make_category(category_id + 1))
+        return next_category(make_category(category_id))
 
     return categories['next']
 
@@ -144,7 +144,6 @@ def category_status(category_id = False):
     source_questions = question_breakdown(category_id)
 
     category = source_questions['category']
-    import pdb; pdb.set_trace()
     global_question_count = source_questions['global']
 
     total_questions_done = questions_done()
@@ -168,6 +167,29 @@ def current_category():
     curr_cat_id = db_query(["SELECT MAX(id) FROM categories"])[0]
 
     return curr_cat_id
+
+
+def process_questions(to_do)
+    """
+    to_do is a dict populated with category id and a dict with the number of validated API questions available for incompletey processed difficulty levels
+    eg
+    {
+        'category': 9
+        'levels': {
+            'easy': 116,
+            'hard': 59
+        }
+    }
+    
+    Difficulty levels are only included if they are incomplete
+
+    Plan is that we wipe them out of the data base and start again
+
+    Probably going to need this somewhere along the line: 
+    QUERY_MAX = 50
+    num_full_calls = floor(current_category_info/QUERY_MAX)
+    final_call_qty = current_category_info % QUERY_MAX
+    """
 
 
 def questions_done(category_id = False):
@@ -195,6 +217,31 @@ def questions_done(category_id = False):
     questions['category'] = db_query(query_details)[0]
 
     return questions
+
+
+def level_counts(category_id):
+
+    """ Get the number of questions added to the local database for each difficulty level
+
+        :param category_id: Category to query
+        :return: dict of question counts by level
+    """
+
+    counts = {
+        'easy': 0,
+        'medium': 0,
+        'hard': 0
+    }
+
+    for level in counts:
+        query_details = [{
+            'query': "SELECT COUNT(*) FROM questions WHERE category_id = %s AND difficulty = %s", 
+            'values': (category_id, level)
+        }]
+
+        counts[level] = db_query(query_details)[0]
+
+    return counts
 
 
 def session_token(expired = False):

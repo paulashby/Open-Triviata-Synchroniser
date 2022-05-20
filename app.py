@@ -1,47 +1,36 @@
 import sys
-from helpers import next_category
+from helpers import next_category, level_counts, process_questions
 def main():
 
-    QUERY_MAX = 50
-
-    # Make sure we're working on the latest category
+    # Start with the next incomplete category
     category = next_category()
 
-    if not category:
-        print("SUCCESS: all questions have been processed :)")
-        sys.exit(0)
+    while category:
 
-    """
-    category be all like:
+        category_id = category['id']
 
-    {'id': 9,
-      'total_easy_question_count': 116,
-      'total_hard_question_count': 59,
-      'total_medium_question_count': 123,
-      'total_question_count': 298
-    }
-    
-    check
-      - which difficulty levels (DLs) are lacking?
-      - Redo those DLs
+        # Get number of questions already processed for each difficulty level
+        already_done = level_counts(category_id)
+        to_do_list = {
+            'category': category_id,
+            'levels': {}
+        }
 
-    num_full_calls = floor(current_category_info/QUERY_MAX)
-    final_call_qty = current_category_info % QUERY_MAX
-    """
-    # else (our count is lower than total_question_count) either:
-        # - new questions have been added
-        # - something has gone wrong and we failed to complete the category on our previous session
-        # In either case, we need to:
-        
-        # - check the counts for each level of difficulty (LOD), 
-            # if we're short in all
-                # - delete all questions for this category, remove it from the categories table and start again 
-            # else 
-                # - we're only short in some, delete all questions for each under-populated LOD and redo it - 
-                # (will also need to delete from answers table AND category if we end up removing all)
-                # - we are definitely short in at least one, since our category question count is lower than total_question_count
+        for level, done in already_done:
+            # Check for incomplete difficulty levels
+            available_questions = category[f"total_{level}_question_count"]
+
+            if done < available_questions:
+                # There are more questions to process for this level - place on to_do_list
+                to_do_list['levels'][level] = available_questions
+
+        process_questions(to_do_list)
+
+        category = next_category(category_id + 1)
 
 
+    print("SUCCESS: all questions have been processed :)")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
