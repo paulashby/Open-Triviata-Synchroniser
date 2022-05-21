@@ -246,7 +246,7 @@ def process_questions(questions, req_details):
             if question_details['type'] == 'boolean':
                 db_queries.append({
                     'query': "INSERT INTO answers (question_id, correct) VALUES (LAST_INSERT_ID(), %s)", 
-                    'values': (int(question_details['correct_answer']),)
+                    'values': (question_details['correct_answer'] == "True",)
                 })
             else:
                 for incorrect_answer in question_details['incorrect_answers']:
@@ -265,9 +265,6 @@ def process_questions(questions, req_details):
     else:
         # No questions were provided - print a warning so it can be looked into if necessary
         print(f"WARNING: No questions provided to process_questions() for category {category_id}")
-
-
-
 
 
 def questions_done(category_id = False):
@@ -535,8 +532,7 @@ def db_query(db_queries):
         ) as connection:
             
             for db_query in db_queries:
-                use_prepared = type(db_query) is dict   
-                import pdb; pdb.set_trace()           
+                use_prepared = type(db_query) is dict            
                 with connection.cursor(prepared=use_prepared) as cursor:
                     if use_prepared:
                         cursor.execute(db_query['query'], db_query['values'])
