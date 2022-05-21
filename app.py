@@ -1,9 +1,13 @@
 import sys
-from helpers import next_category, level_counts, process_questions
+from helpers import next_category, level_counts, process_category
 def main():
 
     # Start with the next incomplete category
     category = next_category()
+
+    # ---------------------------------------------------
+    category = False
+    # ---------------------------------------------------
 
     while category:
 
@@ -13,9 +17,10 @@ def main():
         already_done = level_counts(category_id)
         to_do_list = {
             'category': category_id,
+            'total': category['total_question_count'],
             'levels': {}
         }
-
+        import pdb; pdb.set_trace()
         for level, done in already_done:
             # Check for incomplete difficulty levels
             available_questions = category[f"total_{level}_question_count"]
@@ -24,10 +29,21 @@ def main():
                 # There are more questions to process for this level - place on to_do_list
                 to_do_list['levels'][level] = available_questions
 
-        process_questions(to_do_list)
+        process_category(to_do_list)
 
         category = next_category(category_id + 1)
 
+    # ---------------------------------------------------
+    mock_todo = {
+        'category': 9,
+        'total': 6,
+        'levels': {
+            # 'easy': 116,
+            # 'hard': 59
+        }
+    }
+    process_category(mock_todo)
+    # ---------------------------------------------------
 
     print("SUCCESS: all questions have been processed :)")
     sys.exit(0)
