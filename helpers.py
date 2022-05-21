@@ -4,6 +4,7 @@ import configparser
 from mysql.connector import connect, Error
 
 MIN_CAT_NUM = 9
+MAX_QUESTIONS = 50
 
 
 # Get database credentials from config file
@@ -169,27 +170,104 @@ def current_category():
     return curr_cat_id
 
 
-def process_questions(to_do)
+def process_category(to_do):
+
+    levels_to_do = to_do['levels']
+
+    if not levels_to_do:
+        # Add all questions for this category to local database
+        # return process_questions(to_do)
+
+        # https://opentdb.com/api.php?amount=5&category=9&difficulty=easy&type=multiple
+
+        req_details = {
+            'callback': process_questions,
+            'endpoint': 'api.php',
+            'parameters': {
+                'category': to_do['category'],
+                'amount': MAX_QUESTIONS
+            }
+        }
+
+        total = to_do['total']
+        
+        for i in range(0, total, MAX_QUESTIONS):
+            # API will return unique questions because we're using a token
+            api_request(req_details)
+
+        remaining = total % MAX_QUESTIONS
+
+        if remaining:
+             # Add any stragglers
+            req_details['parameters']['amount'] = remaining
+            api_request(req_details)
+
     """
-    to_do is a dict populated with category id and a dict with the number of validated API questions available for incompletey processed difficulty levels
-    eg
-    {
-        'category': 9
+    mock_todo = {
+        'category': 9,
+        'total': 6,
         'levels': {
             'easy': 116,
             'hard': 59
         }
     }
-    
-    Difficulty levels are only included if they are incomplete
-
-    Plan is that we wipe them out of the data base and start again
-
-    Probably going to need this somewhere along the line: 
-    QUERY_MAX = 50
-    num_full_calls = floor(current_category_info/QUERY_MAX)
-    final_call_qty = current_category_info % QUERY_MAX
     """
+    for level, count in levels_to_do.items():
+        # Add all questions for oustanding levels to local database
+        print(f"{level}: {count}")
+
+
+def process_questions(questions, req_details):
+
+    """ Add the given questions to the local database
+
+        :param questions: A list of question dictionaries, each containing the details of a single question
+        :param: req_details: The url segments used for the api request
+    """
+    if len(questions):
+        category_id = req_details[ 'parameters']['category']
+        category_name = questions[0]['category']
+
+        db_query([{
+            # Make sure category exists
+            'query': "INSERT INTO categories (id, category) VALUES (%s, %s) ON DUPLICATE KEY UPDATE id=id", 
+            'values': (category_id, category_name)
+        }])
+
+        db_queries = []
+
+        for question_details in questions:
+            # Prepare requests for all questions
+            db_queries.append({
+                'query': "INSERT INTO questions (category_id, type, difficulty, question_text) VALUES (%s, %s, %s, %s)", 
+                'values': (category_id, question_details['type'], question_details['difficulty'], question_details['question'])
+            })
+
+            if question_details['type'] == 'boolean':
+                db_queries.append({
+                    'query': "INSERT INTO answers (question_id, correct) VALUES (LAST_INSERT_ID(), %s)", 
+                    'values': (int(question_details['correct_answer']),)
+                })
+            else:
+                for incorrect_answer in question_details['incorrect_answers']:
+                    db_queries.append({
+                        'query': "INSERT INTO answers (question_id, answer, correct) VALUES (LAST_INSERT_ID(), %s, 0);", 
+                        'values': (incorrect_answer,)
+                    })
+                # Add correct answer
+                db_queries.append({
+                        'query': "INSERT INTO answers (question_id, answer, correct) VALUES (LAST_INSERT_ID(), %s, 1);", 
+                        'values': (question_details['correct_answer'],)
+                    })
+
+        db_query(db_queries)
+
+    else:
+        # No questions were provided - print a warning so it can be looked into if necessary
+        print(f"WARNING: No questions provided to process_questions() for category {category_id}")
+
+
+
 
 
 def questions_done(category_id = False):
@@ -254,29 +332,37 @@ def session_token(expired = False):
 
     config.read('appconfig.ini')
     token = config.get('tokenconfig', 'api_token')
-    
-    if expired or len(token) == 0:
+
+    if expired or (not token) or len(token) == 0:
         # Token rejected or not set - request new one from api
         req_details = {
+            'callback': set_token,
             'endpoint': 'api_token.php',
             'parameters': {
                 'command': 'request'
             }
         }
-        token = api_request(req_details)
+        token = api_request(req_details, False)
 
-        if not token.isalnum():
-            print("Error: expected alphanumeric token")
-            sys.exit(1)
+    return token
 
-        config.set('tokenconfig', 'api_token', token)
-        with open('appconfig.ini', 'w') as configfile:
-            config.write(configfile)
-        
-        return api_request(req_details)
+def set_token(token, req_details):
 
-    else:
-        return token
+    """ Store new session token in config file
+
+        :param token: String returned by API
+        :return: the token
+    """ 
+
+    if not token.isalnum():
+        print("Error: expected alphanumeric token")
+        sys.exit(1)
+
+    config.set('tokenconfig', 'api_token', token)
+    with open('appconfig.ini', 'w') as configfile:
+        config.write(configfile)
+
+    return token
 
 
 def reset_session_token(token):
@@ -388,7 +474,16 @@ def process_response(req_details, api_response, req_url):
         response_code = api_response['response_code']
 
         if response_code == 0:
-            return req_details['callback'](api_response['results'][0], req_details)
+            # Successfully retrived token or questions
+            if req_details['endpoint'] == 'api_token.php':
+                # Pass the token string to the callback
+                api_data = api_response['token']
+            else:
+                # Use the questions in the results list to the callback
+                api_data = api_response['results']
+                # NOTE: this was api_response['results'][0], but assuming I want ALL the returned questions, the whole list has got to be better
+
+            return req_details['callback'](api_data, req_details)
 
         elif response_code == 1:
             return quantity_callback()
@@ -406,7 +501,8 @@ def process_response(req_details, api_response, req_url):
 
         elif response_code == 4:
             # We've processed all questions in the current category
-            return process_cat(get_next_cat_id)
+            print("Response code 4: All requested questions have already been processed")
+            return
             
         else:
             # Response code does not match expected values - assume question data is unviable
@@ -439,7 +535,8 @@ def db_query(db_queries):
         ) as connection:
             
             for db_query in db_queries:
-                use_prepared = type(db_query) is dict
+                use_prepared = type(db_query) is dict   
+                import pdb; pdb.set_trace()           
                 with connection.cursor(prepared=use_prepared) as cursor:
                     if use_prepared:
                         cursor.execute(db_query['query'], db_query['values'])
@@ -454,7 +551,6 @@ def db_query(db_queries):
                    
                     query_results = cursor.fetchall()
                     connection.commit()
-
             return  query_results[0] if len(query_results) else 0
 
     except Error as e:
