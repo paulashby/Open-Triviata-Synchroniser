@@ -266,7 +266,7 @@ def session_token(expired = False):
         token = api_request(req_details)
 
         if not token.isalnum():
-            print("Error: expected alpha numric token")
+            print("Error: expected alphanumeric token")
             sys.exit(1)
 
         config.set('tokenconfig', 'api_token', token)
@@ -335,6 +335,7 @@ def api_request(req_details, use_token = True):
 
         :param req_details: Dictionary containing the url fragments
         :param use_token: required when retrieving unique questions
+        :return: Processed data
     """
 
     req_url = "https://opentdb.com/"
@@ -376,6 +377,7 @@ def process_response(req_details, api_response, req_url):
         :param req_details: Dictionary containing the url fragments
         :param api_response: Data from api
         :param req_url: The assembled url that was used for the api call
+        :return: Processed data or None
     """
 
     try:
@@ -415,8 +417,13 @@ def process_response(req_details, api_response, req_url):
         return None
 
 
-# Execute the provided list of MySQL queries
 def db_query(db_queries):
+
+    """ Execute the provided list of MySQL queries
+
+        :param db_queries: List of parameterised request dictionaries/SQL query strings
+        :return: Query results
+    """
 
     # Name of database section in config file
     configname = 'dbconfig'
@@ -439,12 +446,12 @@ def db_query(db_queries):
                     else:
                         cursor.execute(db_query)
 
-                    """
-                    query_results will be overwritten on every iteration.
+                   
+                    # query_results will be overwritten on every iteration.
 
-                    This is OK, because the db_queries argument will contain 
-                    only a single item when performing a SELECT operation
-                    """
+                    # This is OK, because the db_queries argument will contain 
+                    # only a single item when performing a SELECT operation
+                   
                     query_results = cursor.fetchall()
                     connection.commit()
 
