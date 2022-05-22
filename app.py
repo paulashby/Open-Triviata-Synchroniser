@@ -1,7 +1,10 @@
 import sys
-from helpers import next_category, level_counts, process_category
+from helpers import update_trivia_categories, next_category, level_counts, process_category
 
 def main():
+
+    # Make sure we're in sync with Open Trivia
+    update_trivia_categories()
 
     # Start with the next incomplete category
     category = next_category()
