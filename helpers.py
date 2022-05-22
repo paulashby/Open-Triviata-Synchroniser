@@ -32,61 +32,6 @@ def category_info_all():
     return api_request(req_details, False)
 
 
-def question_breakdown(category_id = False):
-
-    """ Get category question counts from API
-
-        :param category_id: Global count if False, else count for given category
-        :return: dict question counts by category id and additional entry for overall question count
-                 Plus, if category_id provided, dict with category id and question counts for each difficulty level
-    """
-
-    req_details = {
-        'callback': extract_counts,
-        'endpoint': 'api_count_global.php'
-    }
-
-    questions = {
-        'global': api_request(req_details, False)
-    }
-
-    if not category_id:
-        return questions
-
-    req_details = {
-        'callback': lambda api_data: api_data,
-        'endpoint': 'api_count.php',
-        'parameters': {
-            'category': category_id
-        }
-    }
-
-    # Return a single dict with category number and question counts for each difficulty level
-    breakdown = api_request(req_details, False)
-    breakdown['category_question_count']['id'] = breakdown['category_id']
-    questions['category'] = breakdown['category_question_count']
-
-    return questions
-
-
-def extract_counts(api_data):
-
-    """ Filter api_data to include only verified question counts
-
-        :param api_data: Data returned by API
-        :Return: Dictionary of verified question counts
-    """
-
-    extracted_counts = {
-        'overall': api_data['overall']['total_num_of_verified_questions']
-    }
-
-    for cat_key in api_data['categories'].keys():
-        extracted_counts[int(cat_key)] = api_data['categories'][cat_key]['total_num_of_verified_questions']
-
-    return extracted_counts
-
-
 def make_category(category_id):
 
     """ Add a new category to the local database
@@ -295,6 +240,43 @@ def questions_done(category_id = False):
     return questions
 
 
+def question_breakdown(category_id = False):
+
+    """ Get category question counts from API
+
+        :param category_id: Global count if False, else count for given category
+        :return: dict question counts by category id and additional entry for overall question count
+                 Plus, if category_id provided, dict with category id and question counts for each difficulty level
+    """
+
+    req_details = {
+        'callback': extract_counts,
+        'endpoint': 'api_count_global.php'
+    }
+
+    questions = {
+        'global': api_request(req_details, False)
+    }
+
+    if not category_id:
+        return questions
+
+    req_details = {
+        'callback': lambda api_data: api_data,
+        'endpoint': 'api_count.php',
+        'parameters': {
+            'category': category_id
+        }
+    }
+
+    # Return a single dict with category number and question counts for each difficulty level
+    breakdown = api_request(req_details, False)
+    breakdown['category_question_count']['id'] = breakdown['category_id']
+    questions['category'] = breakdown['category_question_count']
+
+    return questions
+
+
 def level_counts(category_id):
 
     """ Get the number of questions added to the local database for each difficulty level
@@ -318,6 +300,24 @@ def level_counts(category_id):
         counts[level] = db_query(query_details)[0]
 
     return counts
+
+
+def extract_counts(api_data):
+
+    """ Filter api_data to include only verified question counts
+
+        :param api_data: Data returned by API
+        :Return: Dictionary of verified question counts
+    """
+
+    extracted_counts = {
+        'overall': api_data['overall']['total_num_of_verified_questions']
+    }
+
+    for cat_key in api_data['categories'].keys():
+        extracted_counts[int(cat_key)] = api_data['categories'][cat_key]['total_num_of_verified_questions']
+
+    return extracted_counts
 
 
 def session_token(expired = False):
