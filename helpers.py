@@ -172,49 +172,55 @@ def current_category():
 
 def process_category(to_do):
 
+    """ Add outstanding questions for this category to local database
+
+        :param to_do: Dictionary with category number, total question count and levels dictionary eg {'easy': 100, ...}
+    """
+
     levels_to_do = to_do['levels']
 
     if not levels_to_do:
-        # Add all questions for this category to local database
-        # return process_questions(to_do)
+        # Add all questions for given category to database
+        process_level(to_do['category'], {'level': "all", 'count': to_do['total']})
+    else:
+        for level, count in levels_to_do.items():
+            # Add all questions for given levels to local database
+            process_level(to_do['category'], {'level': level, 'count': count})
 
-        # https://opentdb.com/api.php?amount=5&category=9&difficulty=easy&type=multiple
 
-        req_details = {
-            'callback': process_questions,
-            'endpoint': 'api.php',
-            'parameters': {
-                'category': to_do['category'],
-                'amount': MAX_QUESTIONS
-            }
-        }
+def process_level(category_id, to_do):
 
-        total = to_do['total']
-        
-        for i in range(0, total, MAX_QUESTIONS):
-            # API will return unique questions because we're using a token
-            api_request(req_details)
+    """ Add questions to local database - restrict to difficulty level if provided
 
-        remaining = total % MAX_QUESTIONS
-
-        if remaining:
-             # Add any stragglers
-            req_details['parameters']['amount'] = remaining
-            api_request(req_details)
-
+        :param category_id: Id number of current category
+        :param to_do: Dictionary with difficulty level and question count eg {'level': 'all', 'count': 100'}
     """
-    mock_todo = {
-        'category': 9,
-        'total': 6,
-        'levels': {
-            'easy': 116,
-            'hard': 59
+    req_details = {
+        'callback': process_questions,
+        'endpoint': 'api.php',
+        'parameters': {
+            'category': category_id,
+            'amount': MAX_QUESTIONS
         }
     }
-    """
-    for level, count in levels_to_do.items():
-        # Add all questions for oustanding levels to local database
-        print(f"{level}: {count}")
+
+    difficulty_level = to_do['level']
+
+    if not difficulty_level == "all":
+        req_details['parameters']['difficulty'] = difficulty_level
+
+    total = to_do['count']
+    
+    for i in range(0, total, MAX_QUESTIONS):
+        # API will return unique questions because we're using a token
+        api_request(req_details)
+
+    remaining = total % MAX_QUESTIONS
+
+    if remaining:
+         # Add any stragglers
+        req_details['parameters']['amount'] = remaining
+        api_request(req_details)
 
 
 def process_questions(questions, req_details):
@@ -271,8 +277,8 @@ def questions_done(category_id = False):
 
     """ Get the number of questions added to the local database for the given category
 
-        :param category_id: Global count if False, else count for given category
-        :return: dict of question counts - global and, if category_id provided, category
+        :param category_id: False or category id number
+        :return: dict of question counts - global and category if category_id provided
     """
 
     query_details = ["SELECT COUNT(*) FROM questions"]
