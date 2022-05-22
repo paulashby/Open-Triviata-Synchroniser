@@ -1,5 +1,6 @@
 import sys
 from helpers import next_category, level_counts, process_category
+
 def main():
 
     # Start with the next incomplete category
@@ -11,18 +12,19 @@ def main():
 
         # Get number of questions already processed for each difficulty level
         already_done = level_counts(category_id)
+
         to_do_list = {
             'category': category_id,
             'total': category['total_question_count'],
             'levels': {}
         }
-        
+
         for level, done in already_done.items():
             # Check for incomplete difficulty levels
             available_questions = category[f"total_{level}_question_count"]
 
             if done < available_questions:
-                # There are more questions to process for this level - place on to_do_list
+                # There are more questions to process for this level - place in to_do_list
                 to_do_list['levels'][level] = available_questions
 
         process_category(to_do_list)
