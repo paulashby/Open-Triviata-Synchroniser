@@ -344,6 +344,7 @@ def session_token(expired = False):
 
     return token
 
+
 def set_token(token, req_details):
 
     """ Store new session token in config file
@@ -380,26 +381,6 @@ def reset_session_token(token):
         }
     }
     return api_request(req_details)
-
-
-def success_callback(api_response, req_details):
-
-    """ Process successful api calls
-
-        :param api_response: the returned data
-        :param req_details: the dictionary passed to api_request
-        :return: Token or True
-    """
-
-    if req_details['endpoint'].find('token') < 0:
-        # This is a simple success message - I think related to getting questions
-         # If we have question data, add to our db, load next batch
-         print("Add to database: \n" + repr(api_response))
-         return
-
-    else:
-        # This is a token operation
-        return api_response['token']
 
 
 def quantity_callback():
