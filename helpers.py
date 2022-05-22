@@ -18,18 +18,20 @@ if not "dbconfig" in config:
     sys.exit()
 
 
-def category_info_all():
+def update_trivia_categories():
 
-    """ Get the entire list of categories and IDs from the API
+    global trivia_categories
 
-        :return: List containing dicts of category ids and names
-    """
     req_details = {
         'callback': lambda api_data: api_data['trivia_categories'],
         'endpoint': 'api_category.php'
     }
 
-    return api_request(req_details, False)
+    latest_categories =  api_request(req_details, False)
+
+    for category in latest_categories:
+        # Populate trivia_categories with category number/name pairs
+        trivia_categories[category['id']] = category['name']
 
 
 def make_category(category_id):
@@ -39,9 +41,6 @@ def make_category(category_id):
         :param category_id: the id number for the new category
         :return: the id number for the new category
     """
-
-    if not trivia_categories:
-        trivia_categories = category_info_all()['trivia_categories']
 
     cat_name =  trivia_categories[category_id]
     
@@ -59,15 +58,17 @@ def next_category(category_id = MIN_CAT_NUM):
 
         :return: False or dict with category id and question counts for each difficulty level 
     """
-    categories = category_status(category_id)
 
-    if categories['completed']['all']:
-        return false
+    if not category_id in trivia_categories:
+        # Category doesn't exist - we're done
+        return False
 
-    elif categories['completed']['current']:
+    category = category_status(category_id)
+
+    if category['completed']:
         return next_category(make_category(category_id))
 
-    return categories['next']
+    return category['next']
 
 
 def category_status(category_id = False):
@@ -75,7 +76,7 @@ def category_status(category_id = False):
     """ Get category status - helper for next_category()
 
         :return: dict containing
-            - 'completed' dict with boolean statuses for 'all' and 'current' categories
+            - 'completed' boolean
             - 'next' dict with question breakdown for next category to process
     """
     
@@ -83,19 +84,11 @@ def category_status(category_id = False):
         category_id = current_category()
 
     source_questions = question_breakdown(category_id)
-
     category = source_questions['category']
-    global_question_count = source_questions['global']
-
-    total_questions_done = questions_done()
     category_questions_done = questions_done(category_id)
 
     return {
-        'completed': {
-            'all': (total_questions_done['global'] >= global_question_count['overall'] 
-            or not category_id in global_question_count.keys()),
-            'current': category_questions_done == category['total_question_count']
-        },
+        'completed': category_questions_done == category['total_question_count'],
         'next': category
     }
 
@@ -151,7 +144,7 @@ def process_level(category_id, to_do):
 
     total = to_do['count']
     
-    for i in range(0, total, MAX_QUESTIONS):
+    for i in range(MAX_QUESTIONS, total, MAX_QUESTIONS):
         # API will return unique questions because we're using a token
         api_request(req_details)
 
@@ -472,7 +465,7 @@ def process_response(req_details, api_response, req_url):
 
         elif response_code == 4:
             # We've processed all questions in the current category
-            print("\nNotification: (Response code 4): All requested questions have already been processed")
+            print("\nNotification: (Response code 4): All requested questions have been returned for the given query")
             return
             
         else:
