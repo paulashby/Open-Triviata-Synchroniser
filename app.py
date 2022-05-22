@@ -5,10 +5,6 @@ def main():
     # Start with the next incomplete category
     category = next_category()
 
-    # ---------------------------------------------------
-    category = False
-    # ---------------------------------------------------
-
     while category:
 
         category_id = category['id']
@@ -32,18 +28,6 @@ def main():
         process_category(to_do_list)
 
         category = next_category(category_id + 1)
-
-    # ---------------------------------------------------
-    mock_todo = {
-        'category': 9,
-        'total': 6,
-        'levels': {
-            'easy': 116,
-            'hard': 59
-        }
-    }
-    process_category(mock_todo)
-    # ---------------------------------------------------
 
     print("SUCCESS: all questions have been processed :)")
     sys.exit(0)
