@@ -383,17 +383,6 @@ def reset_session_token(token):
     return api_request(req_details)
 
 
-def quantity_callback():
-
-    """ Not enough items in Open Trivia DB to fulfill request
-    """
-
-    # Need to decide what to do in this case - probably make the call again with the adjusments outlined below
-
-    print("Quantity unavailable - reduce to [total available] % [qs per request] and try again")
-    return
-
-
 def api_request(req_details, use_token = True):
 
     """ Make api calls and parse response
@@ -465,14 +454,16 @@ def process_response(req_details, api_response, req_url):
             return req_details['callback'](api_data, req_details)
 
         elif response_code == 1:
-            return quantity_callback()
+            print(f"\nError (Response code 1): Quantity unavailable - API unable to return data for the query {req_url}")
+            sys.exit(1)
        
         elif response_code == 2: 
-            print(f"\nError (2): Invalid parameter passed to Open Trivia API:\n{req_url}\n")
+            print(f"\nError (Response code 2): Invalid parameter passed to Open Trivia API:\n{req_url}\n")
             sys.exit(1)
 
         elif response_code == 3:
-            # Token not found - get new one to ensure api returns unique questions
+            # Token not found. Attempt to recover - duplicate questions will trigger an SQL error as the question_text field is UNIQUE.
+            # get new token to ensure api returns unique questions (going forward - they're only unique to the new token)
             session_token(True)
 
             # Make the request again
@@ -480,7 +471,7 @@ def process_response(req_details, api_response, req_url):
 
         elif response_code == 4:
             # We've processed all questions in the current category
-            print("Response code 4: All requested questions have already been processed")
+            print("\nNotification: (Response code 4): All requested questions have already been processed")
             return
             
         else:
