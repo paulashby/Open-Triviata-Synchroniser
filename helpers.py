@@ -421,7 +421,8 @@ def api_request(req_details, use_token = True):
     except requests.RequestException:
         return
 
-    return process_response(req_details, response.json(), req_url)
+    if response.status_code != 204:
+        return process_response(req_details, response.json(), req_url)
 
 
 def process_response(req_details, api_response, req_url):
