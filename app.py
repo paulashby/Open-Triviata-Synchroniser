@@ -38,8 +38,8 @@ def main():
         'category': 9,
         'total': 6,
         'levels': {
-            # 'easy': 116,
-            # 'hard': 59
+            'easy': 116,
+            'hard': 59
         }
     }
     process_category(mock_todo)
