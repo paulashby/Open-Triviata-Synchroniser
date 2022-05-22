@@ -16,7 +16,7 @@ def main():
             'total': category['total_question_count'],
             'levels': {}
         }
-        import pdb; pdb.set_trace()
+        
         for level, done in already_done.items():
             # Check for incomplete difficulty levels
             available_questions = category[f"total_{level}_question_count"]
