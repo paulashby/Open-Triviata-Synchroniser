@@ -6,6 +6,8 @@ from mysql.connector import connect, Error
 MIN_CAT_NUM = 9
 MAX_QUESTIONS = 50
 
+trivia_categories = {}
+
 
 # Get database credentials from config file
 config = configparser.ConfigParser()
@@ -93,17 +95,10 @@ def make_category(category_id):
         :return: the id number for the new category
     """
 
-    # Retrieve sample question to determine category name
-    req_details = {
-        'callback': lambda api_results, req_details: api_results['category'],
-        'endpoint': 'api.php',
-        'parameters': {
-            'amount': 1,
-            'category': category_id
-        }
-    }
+    if not trivia_categories:
+        trivia_categories = category_info_all()['trivia_categories']
 
-    cat_name = api_request(req_details, False)
+    cat_name =  trivia_categories[category_id]
     
     db_query([{
         'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 
@@ -449,12 +444,12 @@ def api_request(req_details, use_token = True):
     # Make the call
     try:
         headers = {
-          'Cookie': 'PHPSESSID=1b01789fb2d1898c5d3358944fec0590'
+          'Cookie': "PHPSESSID=1b01789fb2d1898c5d3358944fec0590"
         }
         response = requests.get(req_url, headers=headers)
         response.raise_for_status()
     except requests.RequestException:
-        return None
+        return
 
     return process_response(req_details, response.json(), req_url)
 
@@ -513,7 +508,7 @@ def process_response(req_details, api_response, req_url):
             sys.exit(1)
 
     except (KeyError, TypeError, ValueError):
-        return None
+        return
 
 
 def db_query(db_queries):
