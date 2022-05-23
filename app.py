@@ -1,7 +1,15 @@
 import sys
-from helpers import update_trivia_categories, next_category, level_counts, process_category
+import argparse
+from helpers import new_token, update_trivia_categories, next_category, level_counts, process_category
 
 def main():
+    parser = argparse.ArgumentParser(description="-t Use existing token if available - API will not return questions already provided within the last 6 hours")
+    parser.add_argument('-t', action='store_true')
+    args = parser.parse_args()
+
+    if not args.t:
+        # get new token to ensure api returns unique questions (going forward - they're only unique to the new token)
+        new_token()
 
     # Make sure we're in sync with Open Trivia
     update_trivia_categories()
