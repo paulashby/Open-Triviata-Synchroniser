@@ -14,9 +14,8 @@ config = configparser.ConfigParser()
 config.read("appconfig.ini")
 
 if not "dbconfig" in config:
-    print("Unable to access database credentials.")
+    print("\nUnable to access database credentials.\n")
     sys.exit()
-
 
 def update_trivia_categories():
 
@@ -77,7 +76,7 @@ def next_category(category_id = MIN_CAT_NUM):
             print(f"Category {category_id}: no new questions available")
             return next_category(get_category(category_id + 1))
 
-        print(f"Category {category_id}: new questions available. Processing...")
+        print(f"\nCategory {category_id}: new questions available. Processing...\n")
         return category['next']
 
     return False
@@ -124,7 +123,7 @@ def process_category(to_do):
 
     category = to_do['category']
 
-    print(f"Updating category {category}")
+    print(f"Updating category {category}\n")
 
     levels_to_do = to_do['levels']
 
@@ -133,7 +132,7 @@ def process_category(to_do):
         process_level(category, {'level': "all", 'count': to_do['total']})
     else:
         for level, count in levels_to_do.items():
-            # Add all questions for given levels to local database
+            # Add all questions for given levels to database
             process_level(category, {'level': level, 'count': count})
 
 
@@ -219,7 +218,7 @@ def process_questions(questions, req_details):
 
     else:
         # No questions were provided - print a warning so it can be looked into if necessary
-        print(f"WARNING: No questions provided to process_questions() for category {category_id}")
+        print(f"\nWARNING: No questions provided to process_questions() for category {category_id}\n")
 
 
 def questions_done(category_id = False):
@@ -329,6 +328,18 @@ def extract_counts(api_data):
     return extracted_counts
 
 
+def new_token():
+
+    req_details = {
+        'callback': set_token,
+        'endpoint': 'api_token.php',
+        'parameters': {
+            'command': 'request'
+        }
+    }
+    return api_request(req_details, False)
+
+
 def session_token(expired = False):
 
     """ Retrieve a session token
@@ -342,14 +353,7 @@ def session_token(expired = False):
 
     if expired or (not token) or len(token) == 0:
         # Token rejected or not set - request new one from api
-        req_details = {
-            'callback': set_token,
-            'endpoint': 'api_token.php',
-            'parameters': {
-                'command': 'request'
-            }
-        }
-        token = api_request(req_details, False)
+        token = new_token()
 
     return token
 
@@ -363,7 +367,7 @@ def set_token(token, req_details):
     """ 
 
     if not token.isalnum():
-        print("Error: expected alphanumeric token")
+        print("\nError: expected alphanumeric token\n")
         sys.exit(1)
 
     config.set('tokenconfig', 'api_token', token)
@@ -381,7 +385,7 @@ def reset_session_token(token):
         :return: The new token
     """
 
-    print("resetting session token")
+    print("\nresetting session token\n")
     req_details = {
         'endpoint': 'api_token.php',
         'parameters': {
@@ -464,7 +468,7 @@ def process_response(req_details, api_response, req_url):
             return req_details['callback'](api_data, req_details)
 
         elif response_code == 1:
-            print(f"\nError (Response code 1): Quantity unavailable - API unable to return data for the query {req_url}")
+            print(f"\nError (Response code 1): Quantity unavailable - API unable to return data for the query {req_url}\n")
             sys.exit(1)
        
         elif response_code == 2: 
@@ -481,7 +485,7 @@ def process_response(req_details, api_response, req_url):
 
         elif response_code == 4:
             # We've processed all questions in the current category
-            print("\nNotification: (Response code 4): All requested questions have been returned for the given query")
+            print("\nNotification: (Response code 4): All requested questions have been returned for the current token. Run the app without the -t flag to use a new token\n")
             return
             
         else:
