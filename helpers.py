@@ -144,7 +144,7 @@ def process_level(category_id, to_do):
 
     total = to_do['count']
     
-    for i in range(MAX_QUESTIONS, total, MAX_QUESTIONS):
+    for i in range(MAX_QUESTIONS, total + 1, MAX_QUESTIONS):
         # API will return unique questions because we're using a token
         api_request(req_details)
 
