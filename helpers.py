@@ -35,7 +35,7 @@ def update_trivia_categories():
 
 def get_category(category_id):
 
-    """ Add a new category to the local database
+    """ Add a new category to the local database if given category does not exist
 
         :param category_id: the id number for the new category
         :return: False or the id number for the new category
@@ -223,7 +223,7 @@ def process_questions(questions, req_details):
 
 def questions_done(category_id = False):
 
-    """ Get the number of questions added to the local database for the given category
+    """ Get the number of questions already added to the local database for the given category
 
         :param category_id: False or category id number
         :return: dict of question counts - global and category if category_id provided
@@ -329,6 +329,11 @@ def extract_counts(api_data):
 
 
 def new_token():
+
+    """ Request new token from API
+
+        :return: Session cookie string
+    """
 
     req_details = {
         'callback': set_token,
