@@ -34,20 +34,30 @@ def update_trivia_categories():
         trivia_categories[category['id']] = category['name']
 
 
-def make_category(category_id):
+def get_category(category_id):
 
     """ Add a new category to the local database
 
         :param category_id: the id number for the new category
-        :return: the id number for the new category
+        :return: False or the id number for the new category
     """
+    if not category_id in trivia_categories:
+        # Category doesn't exist - we're done
+        return False
 
     cat_name =  trivia_categories[category_id]
-    
-    db_query([{
-        'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 
-        'values': (category_id, cat_name)
-    }])
+
+    category_exists = db_query([{
+        'query': "SELECT COUNT(*) FROM categories WHERE id = %s", 
+        'values': (category_id,)
+    }])[0]
+
+    if not category_exists:
+        # Make the category
+        db_query([{
+            'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 
+            'values': (category_id, cat_name)
+        }])
 
     return category_id
 
@@ -59,16 +69,18 @@ def next_category(category_id = MIN_CAT_NUM):
         :return: False or dict with category id and question counts for each difficulty level 
     """
 
-    if not category_id in trivia_categories:
-        # Category doesn't exist - we're done
-        return False
+    if category_id:
 
-    category = category_status(category_id)
+        category = category_status(category_id)
 
-    if category['completed']:
-        return next_category(make_category(category_id))
+        if category['completed']:
+            print(f"Category {category_id}: no new questions available")
+            return next_category(get_category(category_id + 1))
 
-    return category['next']
+        print(f"Category {category_id}: new questions available. Processing...")
+        return category['next']
+
+    return False
 
 
 def category_status(category_id = False):
@@ -85,7 +97,7 @@ def category_status(category_id = False):
 
     source_questions = question_breakdown(category_id)
     category = source_questions['category']
-    category_questions_done = questions_done(category_id)
+    category_questions_done = questions_done(category_id)['category']
 
     return {
         'completed': category_questions_done == category['total_question_count'],
@@ -110,15 +122,19 @@ def process_category(to_do):
         :param to_do: Dictionary with category number, total question count and levels dictionary eg {'easy': 100, ...}
     """
 
+    category = to_do['category']
+
+    print(f"Updating category {category}")
+
     levels_to_do = to_do['levels']
 
     if not levels_to_do:
         # Add all questions for given category to database
-        process_level(to_do['category'], {'level': "all", 'count': to_do['total']})
+        process_level(category, {'level': "all", 'count': to_do['total']})
     else:
         for level, count in levels_to_do.items():
             # Add all questions for given levels to local database
-            process_level(to_do['category'], {'level': level, 'count': count})
+            process_level(category, {'level': level, 'count': count})
 
 
 def process_level(category_id, to_do):
