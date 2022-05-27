@@ -68,7 +68,9 @@ def next_category(category_id = MIN_CAT_NUM):
         :return: False or dict with category id and question counts for each difficulty level 
     """
 
-    if category_id:
+    global trivia_categories
+
+    if category_id and category_id in trivia_categories.keys():
 
         category = category_status(category_id)
 
@@ -520,7 +522,7 @@ def db_query(db_queries):
             host=config[configname]['Host'],
             user=config[configname]['User'],
             password=config[configname]['Pass'],
-            database="opentriviata",
+            database="otriviata",
         ) as connection:
             
             for db_query in db_queries:
