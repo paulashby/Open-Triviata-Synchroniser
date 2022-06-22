@@ -30,7 +30,7 @@ try:
 
     ) as connection:
         
-        db_query = "CREATE DATABASE IF NOT EXISTS opentriviata"
+        db_query = "CREATE DATABASE IF NOT EXISTS opentriviata COLLATE utf8mb4_unicode_520_ci"
         with connection.cursor() as cursor:
             cursor.execute(db_query)
 
