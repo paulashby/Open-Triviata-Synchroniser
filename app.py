@@ -37,7 +37,7 @@ def main():
             if done < available_questions:
                 # There are more questions to process for this level - place in to_do_list
                 to_do_list['levels'][level] = available_questions
-
+        
         process_category(to_do_list)
 
         category = next_category(category_id + 1)

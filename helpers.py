@@ -129,6 +129,7 @@ def process_category(to_do):
 
     levels_to_do = to_do['levels']
 
+    # levels_to_do is eg {'easy': 116}
     if not levels_to_do:
         # Add all questions for given category to database
         process_level(category, {'level': "all", 'count': to_do['total']})
@@ -179,7 +180,7 @@ def process_questions(questions, req_details):
 
         :param questions: A list of question dictionaries, each containing the details of a single question
         :param: req_details: The url segments used for the api request
-    """
+    """    
     if len(questions):
         category_id = req_details[ 'parameters']['category']
         category_name = questions[0]['category']
@@ -190,33 +191,43 @@ def process_questions(questions, req_details):
             'values': (category_id, category_name)
         }])
 
-        db_queries = []
+        db_queries_answers = []
+        previous_question_id = None
 
         for question_details in questions:
             # Prepare requests for all questions
-            db_queries.append({
-                'query': "INSERT INTO questions (category_id, type, difficulty, question_text) VALUES (%s, %s, %s, %s)", 
+            db_queries_questions = [{
+                'query': "INSERT INTO questions (category_id, type, difficulty, question_text) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE id=id", 
                 'values': (category_id, question_details['type'], question_details['difficulty'], question_details['question'])
-            })
+            }]
 
-            if question_details['type'] == 'boolean':
-                db_queries.append({
-                    'query': "INSERT INTO answers (question_id, correct) VALUES (LAST_INSERT_ID(), %s)", 
-                    'values': (question_details['correct_answer'] == "True",)
-                })
-            else:
-                for incorrect_answer in question_details['incorrect_answers']:
-                    db_queries.append({
-                        'query': "INSERT INTO answers (question_id, answer, correct) VALUES (LAST_INSERT_ID(), %s, 0);", 
-                        'values': (incorrect_answer,)
-                    })
-                # Add correct answer
-                db_queries.append({
-                        'query': "INSERT INTO answers (question_id, answer, correct) VALUES (LAST_INSERT_ID(), %s, 1);", 
-                        'values': (question_details['correct_answer'],)
-                    })
+            # Add question to database
+            last_insert_id = db_query(db_queries_questions, True)
 
-        db_query(db_queries)
+            # Check that question was not skipped as a duplicate before inserting answers
+            if last_insert_id > 0 and (previous_question_id is None or previous_question_id != last_insert_id):
+
+                if question_details['type'] == 'boolean':
+                    db_queries_answers.append({
+                        'query': "INSERT INTO answers (question_id, correct) VALUES (%s, %s)", 
+                        'values': (last_insert_id, question_details['correct_answer'] == "True")
+                    })
+                else:
+                    for incorrect_answer in question_details['incorrect_answers']:
+                        db_queries_answers.append({
+                            'query': "INSERT INTO answers (question_id, answer, correct) VALUES (%s, %s, 0)", 
+                            'values': (last_insert_id, incorrect_answer)
+                        })
+                    # Add correct answer
+                    db_queries_answers.append({
+                            'query': "INSERT INTO answers (question_id, answer, correct) VALUES (%s, %s, 1)", 
+                            'values': (last_insert_id, question_details['correct_answer'])
+                        })
+
+                previous_question_id = last_insert_id
+        
+        if len(db_queries_answers):
+            db_query(db_queries_answers)
 
     else:
         # No questions were provided - print a warning so it can be looked into if necessary
@@ -468,7 +479,7 @@ def process_response(req_details, api_response, req_url):
                 # Pass the token string to the callback
                 api_data = api_response['token']
             else:
-                # Use the questions in the results list to the callback
+                # Pass the questions in the results list to the callback
                 api_data = api_response['results']
                 # NOTE: this was api_response['results'][0], but assuming I want ALL the returned questions, the whole list has got to be better
 
@@ -504,12 +515,13 @@ def process_response(req_details, api_response, req_url):
         return
 
 
-def db_query(db_queries):
+def db_query(db_queries, questions = False):
 
     """ Execute the provided list of MySQL queries
 
         :param db_queries: List of parameterised request dictionaries/SQL query strings
-        :return: Query results
+        :param questions: True when adding questions to database
+        :return: ID of added row if questions parameter is True, else result of MySQL Query
     """
 
     # Name of database section in config file
@@ -522,9 +534,9 @@ def db_query(db_queries):
             host=config[configname]['Host'],
             user=config[configname]['User'],
             password=config[configname]['Pass'],
-            database="otriviata",
+            database="opentriviata",
         ) as connection:
-            
+
             for db_query in db_queries:
                 use_prepared = type(db_query) is dict            
                 with connection.cursor(prepared=use_prepared) as cursor:
@@ -533,7 +545,6 @@ def db_query(db_queries):
                     else:
                         cursor.execute(db_query)
 
-                   
                     # query_results will be overwritten on every iteration.
 
                     # This is OK, because the db_queries argument will contain 
@@ -541,7 +552,10 @@ def db_query(db_queries):
                    
                     query_results = cursor.fetchall()
                     connection.commit()
-            return  query_results[0] if len(query_results) else 0
+
+            if questions:
+                return cursor.lastrowid
+            return query_results[0] if len(query_results) else 0
 
     except Error as e:
         print(e)
