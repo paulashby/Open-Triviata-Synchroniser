@@ -499,7 +499,7 @@ def process_response(req_details, api_response, req_url):
             session_token(True)
 
             # Make the request again
-            return api_request(req_details, True)
+            return api_request(req_details)
 
         elif response_code == 4:
             # We've processed all questions in the current category
