@@ -494,7 +494,7 @@ def process_response(req_details, api_response, req_url):
             sys.exit(1)
 
         elif response_code == 3:
-            # Token not found. Attempt to recover - duplicate questions will trigger an SQL error as the question_text field is UNIQUE.
+            # Token not found. Attempt to recover - duplicate questions will not trigger an SQL error as we're using ON DUPLICATE KEY UPDATE id=id
             # get new token to ensure api returns unique questions (going forward - they're only unique to the new token)
             session_token(True)
 
