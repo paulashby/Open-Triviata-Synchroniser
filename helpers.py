@@ -181,8 +181,9 @@ def process_questions(questions, req_details):
         :param questions: A list of question dictionaries, each containing the details of a single question
         :param: req_details: The url segments used for the api request
     """    
+    category_id = req_details[ 'parameters']['category']
+    
     if len(questions):
-        category_id = req_details[ 'parameters']['category']
         category_name = questions[0]['category']
 
         db_query([{
