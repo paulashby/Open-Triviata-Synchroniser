@@ -46,17 +46,11 @@ def get_category(category_id):
 
     cat_name =  trivia_categories[category_id]
 
-    category_exists = db_query([{
-        'query': "SELECT COUNT(*) FROM categories WHERE id = %s", 
-        'values': (category_id,)
-    }])[0]
-
-    if not category_exists:
-        # Make the category
-        db_query([{
-            'query': "INSERT INTO categories (id, category) VALUES (%s, %s)", 
-            'values': (category_id, cat_name)
-        }])
+    db_query([{
+        # Make sure category exists
+        'query': "INSERT INTO categories (id, category) VALUES (%s, %s) ON DUPLICATE KEY UPDATE id=id", 
+        'values': (category_id, cat_name)
+    }])
 
     return category_id
 
@@ -182,7 +176,7 @@ def process_questions(questions, req_details):
         :param: req_details: The url segments used for the api request
     """    
     category_id = req_details[ 'parameters']['category']
-    
+
     if len(questions):
         category_name = questions[0]['category']
 
