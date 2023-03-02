@@ -11,30 +11,27 @@
 [Description](#description)<br />[Usage](#usage)<br />[Contributing](#contributing)<br />[Questions](#questions)<br />
 
 ## Description
-PHP port of the programme [originally written in Python](https://github.com/paulashby/Open-Triviata-Synchroniser).</br>
-
-A synchroniser programme to add all validated Open Trivia questions to the Open Triviata Database. The associated API accepts identical requests to those used to access the Open Trivia Database, but differs from the original in two notable ways - firstly, specific questions can be retrieved by providing a comma-separated list of ID numbers and secondly, unencoded text can be requested for use in contexts which output encoded HTML by default, such as Django.
-
-As mentioned above, I initially [wrote the synchroniser in Python](https://github.com/paulashby/Open-Triviata-Synchroniser), intending to run it locally. Unfortunately, the limitations of my shared hosting account meant that it was not possible to update the database remotely. The same limitations prevented me from running Python on the server, so my only option was to convert the programme to PHP. Refactoring the code into classes made the task a lot more fun, but in future, I'll definitely be thinking about the practicalities of deployment up front.
-
-The refactored synchroniser programme is run by a weekly cron job and starts by obtaining from the Open Trivia API a list of verified question counts for all available categories. This is checked against the entries already added to the project database to determine whether there are further questions to add. If so, these are processed, with the data being stored across three tables in the project database. 
+A synchroniser programme to add all validated Open Trivia questions to the Open Triviata Database. The programme starts by obtaining from the Open Trivia API a list of verified question counts for all available categories. This is checked against the entries already added to the project database to determine whether there are further questions to add. If so, these are processed, with the data being stored across three tables in the project database. 
 
 Once all categories have been checked, the programme is complete.
 
 ## Usage
-The synchroniser requires an appconfig.ini in the root directory with the following entries:
+You should include an appconfig.ini file in the root directory with the following entries:
 ```
-[credentials]
-host = "HOST_NAME"
-db_name = "DATABASE_NAME"
-username = "USER_NAME"
-password = "PASSWORD"
-```
+[dbconfig]
+host = HOST_NAME
+user = USER_NAME
+pass = PASSWORD
 
-Get new token and synchronise all questions<br />
-```synchroniser.php```<br /><br />
-Use existing token and synchronise any questions not yet received<br />
-```synchroniser.php -t```
+[tokenconfig]
+api_token = 
+```
+Create the database:<br />
+```python3 createdb.py```<br /><br />
+Run the programme with a new token (and synchronise all questions):<br />
+```python3 app.py```<br /><br />
+Run the programme with an existing token (and synchronise only new questions):<br />
+```php app.py -t```
 
 ## Contributing
 
