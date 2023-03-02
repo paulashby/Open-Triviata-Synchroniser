@@ -11,7 +11,7 @@
 [Description](#description)<br />[Usage](#usage)<br />[Contributing](#contributing)<br />[Questions](#questions)<br />
 
 ## Description
-A synchroniser programme to add all validated Open Trivia questions to the Open Triviata Database. The associated API accepts identical requests to those used to access the Open Trivia Database, but differs from the original in two notable ways - firstly, specific questions can be retrieved by providing a comma-separated list of ID numbers and secondly, unencoded text can be requested for use in contexts which output encoded HTML by default, such as Django.
+A synchroniser programme to add all validated Open Trivia questions to the Open Triviata Database. The [associated API](https://github.com/paulashby/open-triviata-api) accepts identical requests to those used to access the Open Trivia Database, but differs from the original in two notable ways - firstly, specific questions can be retrieved by providing a comma-separated list of ID numbers and secondly, unencoded text can be requested for use in contexts which output encoded HTML by default, such as Django.
 
 The programme starts by obtaining from the Open Trivia API a list of verified question counts for all available categories. This is checked against the entries already added to the project database to determine whether there are further questions to add. If so, these are processed, with the data being stored across three tables in the project database.
 
