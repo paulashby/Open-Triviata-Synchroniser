@@ -45,7 +45,7 @@ Released under the [MIT](https://opensource.org/licenses/MIT) license.
 
 ## Questions
 
-Feel free to [email me](mailto:paul@primitive.co?subject=OpenTriviataSynchroniser%20query%20from%20GitHub) with any queries. If you'd like to see some of my other projects, my GitHub user name is [paulashby](https://github.com/paulashby).
+Feel free to [email me](mailto:paul@primitive.co?subject=OpenTriviataSynchroniser%20query%20from%20GitHub) with any queries.
 
 
 If you are interested in a PHP version of the app, please see the [Open Triviata Synchroniser PHP repository](https://github.com/paulashby/open-triviata-synchroniser-php).
